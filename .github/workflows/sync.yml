@@ -1,0 +1,72 @@
+name: Sync nolibc
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 3 * * 0"
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Query latest Linux release
+        id: release
+        run: |
+          TAG=$(git ls-remote --refs --sort="version:refname" --tags https://github.com/torvalds/linux.git \
+            | awk '{print $2}' \
+            | sed 's#refs/tags/##' \
+            | grep '^v[0-9]' \
+            | grep -v '\-rc' \
+            | tail -n1)
+
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+      - name: Sparse checkout Linux
+        run: |
+          git clone \
+            --filter=blob:none \
+            --no-checkout \
+            https://github.com/torvalds/linux.git linux
+          cd linux
+          git sparse-checkout init --cone
+          git sparse-checkout set tools/include/nolibc
+          git checkout "${{ steps.release.outputs.tag }}"
+
+      - name: Replace nolibc
+        run: |
+          rm -rf include/nolibc
+          mkdir -p tools/include
+          cp -a linux/tools/include/nolibc include/
+
+      - name: Commit
+        run: |
+          git config user.name github-actions
+          git config user.email github-actions@users.noreply.github.com
+
+          git add .
+
+          if git diff --cached --quiet; then
+            echo "No changes"
+            exit 0
+          fi
+
+          TAG=${{ setps.release.outputs.tag }}
+
+          git commit -m "Sync from Linux $TAG"
+          git push
+
+          if git rev-parse $TAG > /dev/null 2>&1; then
+            echo "Tag already exists."
+            exit 0
+          fi
+
+          git tag $TAG
+          git push origin $TAG
