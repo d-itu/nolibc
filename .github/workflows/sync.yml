@@ -58,7 +58,7 @@ jobs:
             exit 0
           fi
 
-          TAG=${{ setps.release.outputs.tag }}
+          TAG=${{ steps.release.outputs.tag }}
 
           git commit -m "Sync from Linux $TAG"
           git push
