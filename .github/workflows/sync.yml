@@ -19,11 +19,14 @@ jobs:
 
       - name: Query latest Linux release
         id: release
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          TAG=$(gh api /repos/torvalds/linux/releases/latest | jq -r .tag_name)
-          echo tag=$TAG >> GITHUB_OUTPUT
+          TAG=$(git ls-remote --refs --sort="version:refname" --tags https://github.com/torvalds/linux.git \
+            | awk '{print $2}' \
+            | sed 's#refs/tags/##' \
+            | grep '^v[0-9]' \
+            | tail -n1)
+
+          echo tag=$TAG >> $GITHUB_OUTPUT
 
       - name: Sparse checkout Linux
         run: |
